@@ -51,8 +51,8 @@ Users can stop protection at any time using the app's Stop button, the notificat
 
 This policy may be updated when app behavior changes. Any material changes should be reflected in the app, repository, and store listing before release.
 
-## Contact
+## Contact Us
 
-Developer: Anuttar Jain
+For support, privacy questions, bug reports, or app publishing questions, contact:
 
-For privacy questions, use the contact method shown on the app store listing or GitHub repository.
+anuttar209@gmail.com
