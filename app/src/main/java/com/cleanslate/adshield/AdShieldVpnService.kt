@@ -89,12 +89,14 @@ class AdShieldVpnService : VpnService() {
             blockedQueries.incrementAndGet()
             DnsMessage.buildBlockedResponse(udp.payload)
         } else {
-            val cacheKey = cacheKey(query.hostname, udp.payload)
-            dnsCache.get(cacheKey)?.also { cachedQueries.incrementAndGet() }
-                ?: forwardDnsQuery(udp.payload)?.also {
-                    allowedQueries.incrementAndGet()
-                    dnsCache.put(cacheKey, it)
-                }
+            val cacheKey = cacheKey(query)
+            dnsCache.get(cacheKey)?.let { cached ->
+                cachedQueries.incrementAndGet()
+                DnsMessage.copyResponseWithQueryId(cached, udp.payload)
+            } ?: forwardDnsQuery(udp.payload)?.also {
+                allowedQueries.incrementAndGet()
+                dnsCache.put(cacheKey, it)
+            }
         } ?: run {
             errorQueries.incrementAndGet()
             return
@@ -106,10 +108,8 @@ class AdShieldVpnService : VpnService() {
         maybeUpdateNotification()
     }
 
-    private fun cacheKey(hostname: String, payload: ByteArray): String {
-        val typeAndClass = if (payload.size >= 4) payload.takeLast(4).joinToString(":") { (it.toInt() and 0xff).toString(16) } else "unknown"
-        return "$hostname|$typeAndClass"
-    }
+    private fun cacheKey(query: DnsMessage.Query): String =
+        "${query.hostname}|${query.qType}|${query.qClass}"
 
     private fun forwardDnsQuery(payload: ByteArray): ByteArray? {
         for (server in AppConfig.UPSTREAM_DNS_SERVERS) {
