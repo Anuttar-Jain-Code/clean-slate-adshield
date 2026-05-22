@@ -1,0 +1,26 @@
+# Clean Slate AdShield default DNS blocklist
+# One domain per line. Leading dot means suffix match.
+# Keep this conservative to avoid breaking apps.
+
+.doubleclick.net
+.googleadservices.com
+.googlesyndication.com
+.google-analytics.com
+.adsystem.com
+.adnxs.com
+.adsrvr.org
+.amazon-adsystem.com
+.scorecardresearch.com
+.taboola.com
+.outbrain.com
+.moatads.com
+.pubmatic.com
+.openx.net
+.criteo.com
+.quantserve.com
+.branch.io
+.appsflyer.com
+.adjust.com
+
+# Streaming and social platforms often serve ads and content from shared infrastructure.
+# Add platform-specific rules carefully because aggressive rules can break playback or login.
