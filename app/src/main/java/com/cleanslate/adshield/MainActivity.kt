@@ -1,6 +1,7 @@
 package com.cleanslate.adshield
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -11,8 +12,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -92,11 +95,22 @@ class MainActivity : ComponentActivity() {
             setPadding(24.dp(), 40.dp(), 24.dp(), 24.dp())
         }
 
-        root.addView(TextView(this).apply {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(TextView(this).apply {
             text = "Clean Slate AdShield"
-            textSize = 30f
+            textSize = 28f
             setTypeface(typeface, Typeface.BOLD)
-        })
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(Button(this).apply {
+            text = "⋮"
+            textSize = 22f
+            contentDescription = "More options"
+            setOnClickListener { showOverflowMenu(it) }
+        }, LinearLayout.LayoutParams(56.dp(), LinearLayout.LayoutParams.WRAP_CONTENT))
+        root.addView(header)
 
         statusText = TextView(this).apply {
             text = "Protection is off."
@@ -143,6 +157,40 @@ class MainActivity : ComponentActivity() {
 
         root.addView(buildDashboard())
         return ScrollView(this).apply { addView(root) }
+    }
+
+    private fun showOverflowMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menu.add("Privacy Policy")
+            menu.add("Contact Us")
+            menu.add("About")
+            setOnMenuItemClickListener { item ->
+                when (item.title.toString()) {
+                    "Privacy Policy" -> showLongTextDialog("Privacy Policy", PRIVACY_POLICY_TEXT)
+                    "Contact Us" -> showLongTextDialog("Contact Us", CONTACT_TEXT)
+                    "About" -> showLongTextDialog("About", ABOUT_TEXT)
+                }
+                true
+            }
+            show()
+        }
+    }
+
+    private fun showLongTextDialog(title: String, message: String) {
+        val density = resources.displayMetrics.density
+        fun Int.dp() = (this * density).toInt()
+        val content = ScrollView(this).apply {
+            addView(TextView(this@MainActivity).apply {
+                text = message
+                textSize = 14f
+                setPadding(20.dp(), 12.dp(), 20.dp(), 12.dp())
+            })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(content)
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun buildDashboard(): LinearLayout {
@@ -280,5 +328,67 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val DASHBOARD_REFRESH_MS = 1_000L
+
+        private const val CONTACT_TEXT = """
+Contact us
+
+For support, privacy questions, bug reports, or app publishing questions, contact:
+
+anuttar209@gmail.com
+"""
+
+        private const val ABOUT_TEXT = """
+Clean Slate AdShield
+
+A local Android DNS filtering VPN that helps reduce ads, trackers, analytics, and telemetry requests across apps and browsers.
+
+The app runs without root access and shows local protection counters in the live dashboard.
+"""
+
+        private const val PRIVACY_POLICY_TEXT = """
+Privacy Policy
+
+Effective date: 2026-05-22
+
+Clean Slate AdShield is a local DNS filtering VPN app for Android. This policy explains what the app does with data and how users can control the app.
+
+What the app does
+Clean Slate AdShield creates a local Android VPN session on the user's device after the user approves the Android VPN permission prompt. The app uses this local VPN to inspect DNS requests and decide whether to allow or block known advertising, analytics, and tracking hostnames.
+
+Data collection
+The app does not require account creation and does not collect names, email addresses, phone numbers, contacts, photos, messages, precise location, payment information, or device identifiers for external tracking.
+
+DNS and browsing data
+DNS hostnames may be processed locally on the device so the app can decide whether to allow or block a request. The app is designed to keep filtering local to the device. It does not upload browsing history, DNS history, or visited website lists to the developer.
+
+Local app data
+The app stores local counters such as blocked requests, allowed requests, cache hits, errors, loaded rule count, and the last update time. These counters are stored on the user's device to show the live dashboard and notification status.
+
+Data sharing
+The app does not sell user data. The app does not share browsing history or DNS history with advertisers or data brokers.
+
+Allowed DNS requests may be forwarded to configured upstream DNS resolvers so normal internet browsing can work. DNS resolvers can see DNS queries they receive, subject to their own privacy policies.
+
+Permissions
+VPN permission is required to create the local DNS filtering VPN.
+Notification permission is used to show the foreground service status notification on supported Android versions.
+Internet permission is required to forward allowed DNS queries to upstream DNS resolvers.
+Foreground service permission is required to keep protection running while the app filters DNS traffic.
+
+Limitations
+DNS filtering cannot guarantee that every advertisement or tracker will be blocked. Some platforms serve ads and normal content from the same infrastructure, so aggressive blocking can break video playback, login, or app functionality.
+
+Children's privacy
+The app is not designed to collect personal information from children.
+
+User controls
+Users can stop protection at any time using the app's Stop button, the notification action, or Android VPN settings. Users can uninstall the app to remove local app data.
+
+Changes to this policy
+This policy may be updated when app behavior changes. Any material changes should be reflected in the app, repository, and store listing before release.
+
+Contact us
+For support or privacy questions, contact: anuttar209@gmail.com
+"""
     }
 }
