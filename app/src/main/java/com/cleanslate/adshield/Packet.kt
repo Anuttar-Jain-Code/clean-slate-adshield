@@ -44,11 +44,11 @@ object Packet {
         buffer.put(0x45.toByte())
         buffer.put(0x00.toByte())
         buffer.putShort(totalLength.toShort())
-        buffer.putShort(0)
+        buffer.putShort(0.toShort())
         buffer.putShort(0x4000.toShort())
         buffer.put(64.toByte())
         buffer.put(17.toByte())
-        buffer.putShort(0)
+        buffer.putShort(0.toShort())
         buffer.putInt(request.destinationAddress)
         buffer.putInt(request.sourceAddress)
 
@@ -60,7 +60,7 @@ object Packet {
         buffer.putShort(request.destinationPort.toShort())
         buffer.putShort(request.sourcePort.toShort())
         buffer.putShort((udpHeaderLength + payload.size).toShort())
-        buffer.putShort(0)
+        buffer.putShort(0.toShort())
         buffer.put(payload)
 
         val udpChecksum = udpChecksum(
@@ -100,11 +100,11 @@ object Packet {
         val pseudoHeader = ByteBuffer.allocate(12 + udpLength + (udpLength % 2)).order(ByteOrder.BIG_ENDIAN)
         pseudoHeader.putInt(sourceAddress)
         pseudoHeader.putInt(destinationAddress)
-        pseudoHeader.put(0)
+        pseudoHeader.put(0.toByte())
         pseudoHeader.put(17.toByte())
         pseudoHeader.putShort(udpLength.toShort())
         pseudoHeader.put(packet, udpOffset, udpLength)
-        if (udpLength % 2 != 0) pseudoHeader.put(0)
+        if (udpLength % 2 != 0) pseudoHeader.put(0.toByte())
         val value = checksum(pseudoHeader.array(), 0, pseudoHeader.position())
         return if (value == 0) 0xffff else value
     }
