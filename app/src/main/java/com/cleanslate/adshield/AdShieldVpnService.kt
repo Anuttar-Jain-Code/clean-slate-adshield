@@ -48,6 +48,7 @@ class AdShieldVpnService : VpnService() {
         if (!running.compareAndSet(false, true)) return
         blocklist = Blocklist.load(this)
         dnsCache.clear()
+        publishStats()
         startForeground(NOTIFICATION_ID, buildNotification())
 
         executor.execute {
@@ -74,6 +75,7 @@ class AdShieldVpnService : VpnService() {
                 }
             } catch (_: Exception) {
                 errorQueries.incrementAndGet()
+                publishStats()
                 stopVpn()
             }
         }
@@ -99,12 +101,14 @@ class AdShieldVpnService : VpnService() {
             }
         } ?: run {
             errorQueries.incrementAndGet()
+            publishStats()
             return
         }
 
         val responsePacket = Packet.buildUdpResponse(udp, dnsResponse)
         output.write(responsePacket)
         output.flush()
+        publishStats()
         maybeUpdateNotification()
     }
 
@@ -138,6 +142,7 @@ class AdShieldVpnService : VpnService() {
         if (!::blocklist.isInitialized) return
         blocklist = Blocklist.load(this)
         dnsCache.clear()
+        publishStats()
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification())
     }
@@ -147,8 +152,24 @@ class AdShieldVpnService : VpnService() {
         runCatching { vpnInterface?.close() }
         vpnInterface = null
         dnsCache.clear()
+        publishStats(isRunning = false)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun publishStats(isRunning: Boolean = running.get()) {
+        StatsStore.save(
+            this,
+            StatsStore.Snapshot(
+                running = isRunning,
+                blocked = blockedQueries.get(),
+                allowed = allowedQueries.get(),
+                cached = cachedQueries.get(),
+                errors = errorQueries.get(),
+                rulesLoaded = if (::blocklist.isInitialized) blocklist.ruleCount else 0,
+                lastUpdatedMs = System.currentTimeMillis()
+            )
+        )
     }
 
     private fun maybeUpdateNotification() {
