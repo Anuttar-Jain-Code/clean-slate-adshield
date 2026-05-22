@@ -45,6 +45,7 @@ class Blocklist private constructor(
             val suffixBlock = linkedSetOf<String>()
             val exactAllow = linkedSetOf<String>()
             val suffixAllow = linkedSetOf<String>()
+            val settings = MainActivity.Settings.load(context)
 
             context.assets.open(AppConfig.BLOCKLIST_ASSET).use { input ->
                 BufferedReader(InputStreamReader(input)).useLines { lines ->
@@ -57,10 +58,72 @@ class Blocklist private constructor(
                     }
                 }
             }
+
+            if (settings.privacyShield) {
+                suffixBlock += PRIVACY_SHIELD_SUFFIX_RULES
+                exactBlock += PRIVACY_SHIELD_EXACT_RULES
+            }
+
+            if (settings.strictMode) {
+                suffixBlock += STRICT_MODE_SUFFIX_RULES
+                exactBlock += STRICT_MODE_EXACT_RULES
+            }
+
             return Blocklist(exactBlock, suffixBlock, exactAllow, suffixAllow)
         }
 
         private data class ParsedRule(val domain: String, val allow: Boolean, val suffix: Boolean)
+
+        private val PRIVACY_SHIELD_SUFFIX_RULES = setOf(
+            "adobedtm.com",
+            "clarity.ms",
+            "bat.bing.com",
+            "permutive.com",
+            "parsely.com",
+            "gumgum.com",
+            "lijit.com",
+            "mxpnl.com",
+            "segment.com",
+            "mixpanel.com",
+            "amplitude.com",
+            "hotjar.com",
+            "fullstory.com",
+            "mouseflow.com",
+            "crazyegg.com",
+            "optimizely.com",
+            "newrelic.com",
+            "nr-data.net",
+            "sentry.io",
+            "bugsnag.com",
+            "rollbar.com",
+            "datadoghq.com",
+            "cloudflareinsights.com",
+            "chartbeat.com",
+            "quantcast.com",
+            "comscore.com"
+        )
+
+        private val PRIVACY_SHIELD_EXACT_RULES = setOf(
+            "analytics.google.com",
+            "www.google-analytics.com",
+            "ssl.google-analytics.com"
+        )
+
+        private val STRICT_MODE_SUFFIX_RULES = setOf(
+            "adservice.google.com",
+            "pagead2.googlesyndication.com",
+            "googleads.g.doubleclick.net",
+            "pubads.g.doubleclick.net",
+            "securepubads.g.doubleclick.net",
+            "static.doubleclick.net",
+            "youtubeads.google.com",
+            "video-stats.l.google.com"
+        )
+
+        private val STRICT_MODE_EXACT_RULES = setOf(
+            "ads.youtube.com",
+            "s.youtube.com"
+        )
 
         private fun parseRule(raw: String): ParsedRule? {
             val noComment = raw.substringBefore('#').trim()
