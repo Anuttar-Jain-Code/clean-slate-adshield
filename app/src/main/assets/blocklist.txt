@@ -6,6 +6,11 @@
 .googleadservices.com
 .googlesyndication.com
 .google-analytics.com
+.google-analytics.com
+.analytics.google.com
+.googletagmanager.com
+.googletagservices.com
+.googleoptimize.com
 .adsystem.com
 .adnxs.com
 .adsrvr.org
@@ -21,6 +26,45 @@
 .branch.io
 .appsflyer.com
 .adjust.com
+.segment.io
+.mixpanel.com
+.amplitude.com
+.heap.io
+.hotjar.com
+.fullstory.com
+.mouseflow.com
+.crazyegg.com
+.optimizely.com
+.nr-data.net
+.newrelic.com
+.datadoghq-browser-agent.com
+.sentry.io
+.bugsnag.com
+.rollbar.com
+.facebook.com
+.facebook.net
+.connect.facebook.net
+.analytics.yahoo.com
+.yandex.ru
+.yandex.net
+.matomo.cloud
+.cloudflareinsights.com
+.chartbeat.com
+.quantcast.com
+.comscore.com
+.rlcdn.com
+.krxd.net
+.bluekai.com
+.rubiconproject.com
+.indexww.com
+.media.net
+.contextweb.com
+.adform.net
+.adroll.com
+.bidswitch.net
+.33across.com
+.sharethrough.com
+.smartadserver.com
 
 # Streaming and social platforms often serve ads and content from shared infrastructure.
 # Add platform-specific rules carefully because aggressive rules can break playback or login.
