@@ -21,7 +21,10 @@ class AdShieldVpnService : VpnService() {
     private val running = AtomicBoolean(false)
     private val blockedQueries = AtomicLong(0)
     private val allowedQueries = AtomicLong(0)
+    private val cachedQueries = AtomicLong(0)
+    private val errorQueries = AtomicLong(0)
     private val executor = Executors.newSingleThreadExecutor()
+    private val dnsCache = DnsCache()
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private lateinit var blocklist: Blocklist
@@ -29,6 +32,7 @@ class AdShieldVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopVpn()
+            ACTION_RELOAD -> reloadBlocklist()
             else -> startVpn()
         }
         return START_STICKY
@@ -43,16 +47,17 @@ class AdShieldVpnService : VpnService() {
     private fun startVpn() {
         if (!running.compareAndSet(false, true)) return
         blocklist = Blocklist.load(this)
+        dnsCache.clear()
         startForeground(NOTIFICATION_ID, buildNotification())
 
         executor.execute {
             try {
                 val builder = Builder()
                     .setSession("Clean Slate AdShield")
-                    .setMtu(1500)
-                    .addAddress(VPN_ADDRESS, 32)
-                    .addDnsServer(VPN_DNS)
-                    .addRoute(VPN_DNS, 32)
+                    .setMtu(AppConfig.MTU)
+                    .addAddress(AppConfig.VPN_ADDRESS, 32)
+                    .addDnsServer(AppConfig.VPN_DNS)
+                    .addRoute(AppConfig.VPN_DNS, 32)
                     .allowFamily(android.system.OsConstants.AF_INET)
 
                 vpnInterface = builder.establish()
@@ -68,6 +73,7 @@ class AdShieldVpnService : VpnService() {
                     }
                 }
             } catch (_: Exception) {
+                errorQueries.incrementAndGet()
                 stopVpn()
             }
         }
@@ -75,16 +81,24 @@ class AdShieldVpnService : VpnService() {
 
     private fun handlePacket(frame: ByteArray, length: Int, output: FileOutputStream) {
         val udp = Packet.parseUdpDatagram(frame, length) ?: return
-        if (udp.destinationPort != DNS_PORT) return
+        if (udp.destinationPort != AppConfig.DNS_PORT) return
         val query = DnsMessage.parseQuery(udp.payload) ?: return
+        val decision = blocklist.decide(query.hostname)
 
-        val dnsResponse = if (blocklist.isBlocked(query.hostname)) {
+        val dnsResponse = if (decision.blocked) {
             blockedQueries.incrementAndGet()
             DnsMessage.buildBlockedResponse(udp.payload)
         } else {
-            allowedQueries.incrementAndGet()
-            forwardDnsQuery(udp.payload)
-        } ?: return
+            val cacheKey = cacheKey(query.hostname, udp.payload)
+            dnsCache.get(cacheKey)?.also { cachedQueries.incrementAndGet() }
+                ?: forwardDnsQuery(udp.payload)?.also {
+                    allowedQueries.incrementAndGet()
+                    dnsCache.put(cacheKey, it)
+                }
+        } ?: run {
+            errorQueries.incrementAndGet()
+            return
+        }
 
         val responsePacket = Packet.buildUdpResponse(udp, dnsResponse)
         output.write(responsePacket)
@@ -92,11 +106,24 @@ class AdShieldVpnService : VpnService() {
         maybeUpdateNotification()
     }
 
-    private fun forwardDnsQuery(payload: ByteArray): ByteArray? = try {
+    private fun cacheKey(hostname: String, payload: ByteArray): String {
+        val typeAndClass = if (payload.size >= 4) payload.takeLast(4).joinToString(":") { (it.toInt() and 0xff).toString(16) } else "unknown"
+        return "$hostname|$typeAndClass"
+    }
+
+    private fun forwardDnsQuery(payload: ByteArray): ByteArray? {
+        for (server in AppConfig.UPSTREAM_DNS_SERVERS) {
+            val response = queryUdpResolver(server, payload)
+            if (response != null) return response
+        }
+        return null
+    }
+
+    private fun queryUdpResolver(server: String, payload: ByteArray): ByteArray? = try {
         DatagramSocket().use { socket ->
             protect(socket)
-            socket.soTimeout = DNS_TIMEOUT_MS
-            val upstream = InetSocketAddress(UPSTREAM_DNS, DNS_PORT)
+            socket.soTimeout = AppConfig.DNS_TIMEOUT_MS
+            val upstream = InetSocketAddress(server, AppConfig.DNS_PORT)
             socket.send(DatagramPacket(payload, payload.size, upstream))
             val responseBuffer = ByteArray(4096)
             val response = DatagramPacket(responseBuffer, responseBuffer.size)
@@ -107,16 +134,25 @@ class AdShieldVpnService : VpnService() {
         null
     }
 
+    private fun reloadBlocklist() {
+        if (!::blocklist.isInitialized) return
+        blocklist = Blocklist.load(this)
+        dnsCache.clear()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, buildNotification())
+    }
+
     private fun stopVpn() {
         if (!running.getAndSet(false)) return
         runCatching { vpnInterface?.close() }
         vpnInterface = null
+        dnsCache.clear()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     private fun maybeUpdateNotification() {
-        val total = blockedQueries.get() + allowedQueries.get()
+        val total = blockedQueries.get() + allowedQueries.get() + cachedQueries.get() + errorQueries.get()
         if (total % 25L != 0L) return
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(NOTIFICATION_ID, buildNotification())
@@ -134,7 +170,8 @@ class AdShieldVpnService : VpnService() {
 
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Clean Slate AdShield is active")
-            .setContentText("Blocked ${blockedQueries.get()} DNS requests · Allowed ${allowedQueries.get()}")
+            .setContentText("Blocked ${blockedQueries.get()} · Allowed ${allowedQueries.get()} · Cached ${cachedQueries.get()}")
+            .setStyle(Notification.BigTextStyle().bigText("Blocked ${blockedQueries.get()} DNS requests, allowed ${allowedQueries.get()}, cache hits ${cachedQueries.get()}, errors ${errorQueries.get()}. Rules loaded: ${if (::blocklist.isInitialized) blocklist.ruleCount else 0}."))
             .setSmallIcon(android.R.drawable.ic_secure)
             .setOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent)
@@ -157,12 +194,8 @@ class AdShieldVpnService : VpnService() {
     companion object {
         const val ACTION_START = "com.cleanslate.adshield.START"
         const val ACTION_STOP = "com.cleanslate.adshield.STOP"
+        const val ACTION_RELOAD = "com.cleanslate.adshield.RELOAD"
         private const val CHANNEL_ID = "adshield_vpn"
         private const val NOTIFICATION_ID = 1001
-        private const val VPN_ADDRESS = "10.7.0.2"
-        private const val VPN_DNS = "10.7.0.1"
-        private const val UPSTREAM_DNS = "1.1.1.1"
-        private const val DNS_PORT = 53
-        private const val DNS_TIMEOUT_MS = 3000
     }
 }
